@@ -10,14 +10,13 @@ This RFC introduces new router helpers and modifiers that represent a decomposit
 
 ```hbs
 {{transition-to}}
+{{root-url}}
 {{url-for}}
-{{external-url}}
 {{is-active}}
 {{is-loading}}
-{{is-transitioning}}
+{{is-transitioning-in}}
+{{is-transitioning-out}}
 ```
-
-For convience sake `{{transition-to}}` is a [macro](#macro) that can be used as an element modifier.
 
 ## Motivation
 
@@ -46,7 +45,7 @@ The issue with these class names is that they are not declared anywhere in your 
 
 Furthermore, addons like [ember-cli-active-link-wrapper](https://github.com/alexspeller/ember-cli-active-link-wrapper) and [ember-bootstarp-nav-link](https://github.com/zoltan-nz/ember-bootstrap-nav-link) do a ton of work arounds to get things like the `.active` class to show up on wrapping elements instead of the element directly. This is a great example that shows we are missing some primitives.
 
-### Default QueryParam Serialization
+### Default Query Param Serialization
 
 Lastly, `{{link-to}}` has very strange behavior when it comes to serializing query params. On a controller you declare the query params for a specific route. These query params can have defaults for them. For example if you have a controller that looks like:
 
@@ -76,13 +75,219 @@ Looking at a template you would have no idea that rendering the `{{link-to}}` wo
 
 ## Detailed design
 
-> This is the bulk of the RFC.
+Below is a detailed design of all of the template helpers and modifiers.
 
-> Explain the design in enough detail for somebody
-familiar with the framework to understand, and for somebody familiar with the
-implementation to implement. This should get into specifics and corner-cases,
-and include examples of how the feature is used. Any new terminology should be
-defined here.
+### {{transition-to}} Element Modifier
+
+```hbs
+<a {{transition-to 'people.index' model queryParams=(hash a=a)}}>Profile</a>
+```
+
+`{{transition-to}}` is an element modifier that transitions the router to a new route when a user interacts with it. When installed on an anchor tag it will generate the url and set it as the `href` exactly how `{{url-for}}` would generate a url. When a user clicks or taps on the link, the event will be handled by Ember's global [`EventDispatcher`](https://www.emberjs.com/api/ember/release/classes/Ember.EventDispatcher).
+
+By default `{{transition-to}}` adds to the browser's history when transitioning between routes. However, to replace the current entry in the browser's history you can use the `replace=true` option. This will behave exactly how `{{link-to ... replace=true}}` works.
+
+```hbs
+<a {{transition-to 'people.index' model queryParams=(hash a=a) replace=true}}>Profile</a>
+```
+
+`{{transition-to}}` takes a new option `data` that allows you to add metadata to the `Transition` object. For instance if you were instrumenting your application with Google Analytics you could use this in conjection with the routing service to understand the attribution of a transition.
+
+```hbs
+<a {{transition-to 'people.index' data=(hash attribution="edit.continue.button")}}>Continue >></a>
+```
+
+Then using the routing service's `routeDidChange` events you can intercept this data on the transition.
+
+```js
+import Route from '@ember/routing/route';
+import { inject as service } from '@ember/service';
+
+export default Route.extend({
+  router: service('router'),
+  init() {
+    this._super(...arguments);
+
+    this.router.on('routeDidChange', transition => {
+      ga.send('pageView', {
+        from: transition.from ? transition.from.name : 'initial',
+        to: transition.to.name,
+        attribution: transition.data.attribution
+      });
+    });
+  }
+})
+```
+
+#### `transitionTo` updates
+
+`transitionTo` has always synchrounously returned a new `Transition` instance however it was the responsibilty of the caller to instert `data` onto the `Transition` instance. To align the declaritive API with the imperative API, this RFC proposes that `transitionTo` allows you to pass data in the options of `transitionTo` that will be set on the `Transition` during construction time.
+
+```ts
+interface Options {
+  queryParams?: Dict<string|number>,
+  data?: Dict<string|number>
+}
+
+interface Router /* Route, RouterService */ {
+  //...
+  transitionTo(routeName: string, models?: string|number|object, options?: Options): Transition;
+}
+```
+
+#### `Transition.data` integrity
+
+The data in a `Transition` is gurnateed to be carried through the completion of the route transition. This includes `abort`s, `redirect`s and `retry`s of the transition.
+
+### URL Generation Helpers
+
+### `{{root-url}}` Helper
+
+`{{root-url}}` simply returns the value from `Application.rootURL`. It can be used to prefix any `href` values you wish to hard code.
+
+```hbs
+<a href="{{root-url}}profile">Profile</a>
+```
+
+Will result in the following for the default configuration:
+
+```html
+<a href="/profile">Profile</a>
+```
+
+#### Signature Explainer
+
+`{{root-url}}` does not take any parameters.
+
+### `{{url-for}}` Helper
+
+```hbs
+{{url-for routeName model queryParams=(hash a=a)}}
+```
+
+`{{url-for}}` generates a root-relative URL as a string (which will include the application's rootUrl).
+
+#### Signature Explainer
+
+Using the example above:
+
+_Positional Params_
+- **`routeName`** _String_: A fully-qualified name of this route, like `"people.index"`
+- **`model`** _...Object|Array|Number|String_: Optionally pass an arbitrary amount of models to use for generation
+
+_Named Params_
+- **`queryParms`** _Object_: Optionally pass key value pairs that will be serialized
+
+_Returns_
+- _String_: a root-relative URL as a string (which will include the application's `rootUrl`)
+
+### Route State Helpers
+
+### `{{is-active}}` Helper
+
+```hbs
+{{is-active 'people.index' model queryParams=(hash a=a)}}
+```
+
+The arguments to `{{is-active}}` have the same semantics as `{{url-for}}`, however the return value is a boolean. This should provide the same logic that determines whether to put an `active` class on a `{{link-to}}`.
+
+#### Signature Explainer
+
+Using the example above:
+
+_Positional Params_
+- **`routeName`** _String_: A fully-qualified name of this route, like `"people.index"`
+- **`model`** _...Object|Array|Number|String_: Optionally pass an arbitrary amount of models to use for generation
+
+_Named Params_
+- **`queryParms`** _Object_: Optionally pass key value pairs that will be used to determine if the route is active.
+
+_Returns_
+- _Boolean_: Determines if the route is active or not.
+
+### `{{is-loading}}` Helper
+
+```hbs
+{{is-loading 'people.index' model queryParams=(hash a=a)}}
+```
+
+The arguments to `{{is-loading}}` have the same semantics as `{{url-for}}` and `{{is-active}}`, however if any of the model(s) passed to it are unresolved e.g. evaluate to `undefined` the helper will return `true`, otherwise the helper will return `false`. This should provide the same logic that determines whether to put an `loading` class on a `{{link-to}}`.
+
+#### Signature Explainer
+
+Using the example above:
+
+_Positional Params_
+- **`routeName`** _String_: A fully-qualified name of this route, like `"people.index"`
+- **`model`** _...Object|Array|Number|String_: Optionally pass an arbitrary amount of models to use for generation
+
+_Named Params_
+- **`queryParms`** _Object_: Optionally pass key value pairs that will be used to determine if the route is loading.
+
+_Returns_
+- _Boolean_: Determines if the route is loading or not.
+
+### `{{is-transitioning-in}}` Helper
+
+```hbs
+{{is-transitioning-in 'people.index' model queryParams=(hash a=a)}}
+```
+
+The arguments to `{{is-transitioning-in}}` have the same semantics as all the other route state helpers, however `{{is-transitioning-in}}` only returns `true` when the route is going from an non-active to an active state. This should provide the same logic that determines whether to put an `ember-transition-in` class on a `{{link-to}}`.
+
+#### Signature Explainer
+
+Using the example above:
+
+_Positional Params_
+- **`routeName`** _String_: A fully-qualified name of this route, like `"people.index"`
+- **`model`** _...Object|Array|Number|String_: Optionally pass an arbitrary amount of models to use for generation
+
+_Named Params_
+- **`queryParms`** _Object_:  Optionally pass key value pairs that will be used to determine if the route is transitioning in.
+
+_Returns_
+- _Boolean_: Determines if the route is transitioning in.
+
+### `{{is-transitioning-out}}` Helper
+
+```hbs
+{{is-transitioning-out 'people.index' model queryParams=(hash a=a)}}
+```
+
+`{{is-transitioning-out}}` is just the inverse of `{{is-transitioning-in}}`.
+
+#### Signature Explainer
+
+Using the example above:
+
+_Positional Params_
+- **`routeName`** _String_: A fully-qualified name of this route, like `"people.index"`
+- **`model`** _...Object|Array|Number|String_: Optionally pass an arbitrary amount of models to use for generation
+
+_Named Params_
+- **`queryParms`** _Object_:  Optionally pass key value pairs that will be used to determine if the route is transitioning out.
+
+_Returns_
+- _Boolean_: Determines if the route is transitioning out.
+
+### Event Dispatcher Changes
+
+In the past, only `HTMLAnchorElement`s that were produced by `{{link-to}}`s would produce a transition when a user clicked on them. This RFC changes to the global `EventDispatcher` to allow for any `HTMLAnchorElement` with a valid root relative `href` to cause a transition. This will allow for us to not only allows us to support use cases like the ones described in the [motivation](#anchor-tags), it makes teaching easier since people who know HTML don't need know an Ember specific API to participate in routing transitions.
+
+#### Route Globs And Route Blacklisting
+
+While the vast majority of the time developers want root relative URLs to cause a transition there are cases where you want root relative urls to cause a normal HTTP navigation. In the router map you can define [wildcard / globbing](https://guides.emberjs.com/release/routing/defining-your-routes/#toc_wildcard--globbing-routes) that makes this problematic as any root relative url can be catched by a wildcard route. To solve this issue this RFC proposes expanding the route options to allow for a black list of urls that are allowed to cause a normal HTTP navigation.
+
+
+```js
+Router.map(function() {
+  this.route('not-found', { path: '/*path', blacklist: ['/contact-us', '/order/:order_id'] });
+});
+```
+
+When an event comes into the `EventDispatcher` we will cross check the blacklist to see if the event should be let through to the browser or if it should be handled internally.
+
 
 ## How we teach this
 
