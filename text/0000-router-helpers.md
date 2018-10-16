@@ -24,16 +24,15 @@ This RFC introduces new router helpers and modifiers that represent a decomposit
 
 ### Anchor Tags
 
-We currently do not have a good solution for transitioning solely based on HTML anchors defined in the templating layer. For instance let say you are using [Ember Intl](https://github.com/ember-intl/ember-intl) to do internationalization for your application. Ember Intl uses the [ICU message format](http://userguide.icu-project.org/formatparse/messages) for the actual translation strings and supports having HTML within the string. Now lets say you want to put a link in a translation string and have it work like `{{link-to}}` works. In that case you either have role your own solution or use something like [Ember-href-to](https://github.com/intercom/ember-href-to). API's like `RouterService#transitionTo` can transition an application using relative URLs and we have an oppurtunity to leverage this functionality to support this use case.
+We currently do not have a good solution for transitioning solely based on HTML anchors defined in the templating layer. For instance let say you are using [Ember Intl](https://github.com/ember-intl/ember-intl) to do internationalization for your application. Ember Intl uses the [ICU message format](http://userguide.icu-project.org/formatparse/messages) for the actual translation strings and supports having HTML within the string. Now lets say you want to put a link in a translation string and have it work like `{{link-to}}` works. In that case you either have role your own solution or use something like [Ember-href-to](https://github.com/intercom/ember-href-to). Another example where this would be useful is that links within markdown produced by addons like [Ember-CLI-Showdown](https://github.com/gcollazo/ember-cli-showdown) would just work. API's like `RouterService#transitionTo` can transition an application using relative URLs and we have an opportunity to leverage this functionality to support this use case.
 
 ### Extensibility Of `{{link-to}}`
 
-In 2.11 we moved `LinkComponent` from `private` to `public` largely because there was no other way to modify the behavior of `{{link-to}}` and it had effecively become de-facto public API. That being said, it is less than desirable to `reopen` or `extend` framework objects to gain access to the functionality to create some application specific primitive. For example [Ember Bootsrap](https://github.com/kaliber5/ember-bootstrap/) extends the [`LinkComponent`](https://github.com/kaliber5/ember-bootstrap/blob/master/addon/components/base/bs-dropdown/menu/link-to.js) and then layers more functionality on top of it. Addons would be better served if they had access to more primitive functionality.
-
+In 2.11 we moved `LinkComponent` from `private` to `public` largely because there was no other way to modify the behavior of `{{link-to}}` and it had effectively become de-facto public API. That being said, it is less than desirable to `reopen` or `extend` framework objects to gain access to the functionality to create some application specific primitive. For example [Ember Bootsrap](https://github.com/kaliber5/ember-bootstrap/) extends the [`LinkComponent`](https://github.com/kaliber5/ember-bootstrap/blob/master/addon/components/base/bs-dropdown/menu/link-to.js) and then layers more functionality on top of it. Addons would be better served if they had access to more primitive functionality.
 
 ### CSS Class Magic
 
-`{{link-to}}` adds some convient, yet not obvious, classes to the element. These classes are:
+`{{link-to}}` adds some convienent, yet not obvious, classes to the element. These classes are:
 
 - `active`: applied to any `{{link-to}}` that is on the "active" path
 - `disabled`: applied depending on the evaluation of `disabled=someBool`
@@ -71,7 +70,11 @@ In the DOM you will have an `href` on the anchor that gets serializes as:
 <a href="/profile?someBool=true" class="active ember-view">Profile</a>
 ```
 
-Looking at a template you would have no idea that rendering the `{{link-to}}` would result in the query params being serialized. From an implementation point of view, this is problematic as we are forced to `lookup` the `Route` and the associated `Controller` to grab the query params. This can add a non-trival amount of overhead during rendering, especially if you have many `{{link-to}}`s on a route that link many different parts of your application. As a sidenote, this is one of the things  that needs to be delt with if we are ever to kill controllers.
+Looking at a template you would have no idea that rendering the `{{link-to}}` would result in the query params being serialized. From an implementation point of view, this is problematic as we are forced to `lookup` the `Route` and the associated `Controller` to grab the query params. This can add a non-trivial amount of overhead during rendering, especially if you have many `{{link-to}}`s on a route that link many different parts of your application. As a side-note, this is one of the things  that needs to be delt with if we are ever to kill controllers.
+
+### Does Not Work With Angle Bracket Invocation
+
+Since angle bracket invocation does not support positional params, `{{link-to}}` has to adapt it's public API.
 
 ## Detailed design
 
@@ -80,18 +83,28 @@ Below is a detailed design of all of the template helpers and modifiers.
 ### `{{transition-to}}` Element Modifier
 
 ```hbs
-<a {{transition-to 'people.index' model queryParams=(hash a=a)}}>Profile</a>
+<a {{transition-to routeName model queryParams=(hash a=a)}}>Profile</a>
 ```
 
 `{{transition-to}}` is an element modifier that transitions the router to a new route when a user interacts with it. When installed on an anchor tag it will generate the url and set it as the `href` exactly how `{{url-for}}` would generate a url. When a user clicks or taps on the link, the event will be handled by Ember's global [`EventDispatcher`](https://www.emberjs.com/api/ember/release/classes/Ember.EventDispatcher).
 
-By default `{{transition-to}}` adds to the browser's history when transitioning between routes. However, to replace the current entry in the browser's history you can use the `replace=true` option. This will behave exactly how `{{link-to ... replace=true}}` works.
+#### Signature Explainer
 
-```hbs
-<a {{transition-to 'people.index' model queryParams=(hash a=a) replace=true}}>Profile</a>
-```
+Using the example above:
 
-`{{transition-to}}` takes a new option `data` that allows you to add metadata to the `Transition` object. For instance if you were instrumenting your application with Google Analytics you could use this in conjection with the routing service to understand the attribution of a transition.
+_Positional Params_
+- **`routeName`** _String_: A fully-qualified name of this route, like `"people.index"`
+- **`model`** _...Object|Array|Number|String_: Optionally pass an arbitrary amount of models to use for generation
+
+_Named Params_
+- **`queryParms`** _Object_: Optionally pass key value pairs that will be serialized
+- **`data`** _Object_: Optionally pass a metadata key value pairs that will be attached to the transition at `Transition.data`. See below.
+- **`replace`** _Boolean_: Optionally pass a boolen to replace the current entry in the browser's history. By default `replace` is `false`.
+
+
+#### Passing Data To Transition
+
+`{{transition-to}}` takes a new option `data` that allows you to add metadata to the `Transition` object. For instance if you were instrumenting your application with Google Analytics you could use this in conjunction with the routing service to understand the attribution of a transition.
 
 ```hbs
 <a {{transition-to 'people.index' data=(hash attribution="edit.continue.button")}}>Continue >></a>
@@ -121,7 +134,7 @@ export default Route.extend({
 
 #### `transitionTo` updates
 
-`transitionTo` has always synchrounously returned a new `Transition` instance however it was the responsibilty of the caller to instert `data` onto the `Transition` instance. To align the declaritive API with the imperative API, this RFC proposes that `transitionTo` allows you to pass data in the options of `transitionTo` that will be set on the `Transition` during construction time.
+`transitionTo` has always synchronously returned a new `Transition` instance however it was the responsibility of the caller to insert `data` onto the `Transition` instance. To align the declarative API with the imperative API, this RFC proposes that `transitionTo` allows you to pass data in the options of `transitionTo` that will be set on the `Transition` during construction time.
 
 ```ts
 interface Options {
@@ -137,7 +150,7 @@ interface Router /* Route, RouterService */ {
 
 #### `Transition.data` integrity
 
-The data in a `Transition` is gurnateed to be carried through the completion of the route transition. This includes `abort`s, `redirect`s and `retry`s of the transition.
+The data in a `Transition` is guaranteed to be carried through the completion of the route transition. This includes `abort`s, `redirect`s and `retry`s of the transition.
 
 ### URL Generation Helpers
 
@@ -288,35 +301,113 @@ Router.map(function() {
 
 When an event comes into the `EventDispatcher` we will cross check the blacklist to see if the event should be let through to the browser or if it should be handled internally.
 
+### Deprecation of `{{link-to}}`
+
+This RFC explodes out all of the functionality of `{{link-to}}` into a series of helpers. Since `{{link-to}}` was added to Ember it has grown naturally and unfortunately has added features that are non-performant and are not required by all applications. Because us this we plan to deprecate `{{link-to}}` and provide a [codemod](#migration-path) for migrating all instance of `{{link-to}}` to the corresponding helpers.
+
+### Deprecation of `{{query-params}}`
+
+This RFC introduces APIs that take `queryParams` as a named parameter and thus `{{query-params}}` is not needed as a stand alone helper.
+
+### Deprecation of Default Query Param Serialization
+
+As mentioned in the motivation, we want do not want to lookup the corresponding controller to serialize the default query param values. This means that any query params that you want to be serialized must be passed directly into the corresponding helper. As part of the migration **only** query params that were declared with `{{query-params}}` will be migrated.
+
+## Migration Path
+
+Since `{{link-to}}` is static we can write a codemod using [Ember Template Recast](https://github.com/ember-template-lint/ember-template-recast) to migrate the code. Below are numerous before and after examples of how the codemod would migrate.
+
+### Basic `{{link-to}}`
+
+**Before:**
+
+```hbs
+{{#link-to 'profile' class="profile"}}Profile{{/link-to}}
+{{link-to 'About' 'about'}}
+```
+
+**After:**
+
+```hbs
+<a href={{url-for 'profile'}} class="profile">Profile</a>
+<a href={{url-for 'about'}}>About</a>
+```
+
+### With Model `{{link-to}}`
+
+**Before:**
+
+```hbs
+{{#link-to 'profile' this.profile class="profile"}}Profile{{/link-to}}
+{{link-to 'About' 'about' this.contact}}
+```
+
+**After:**
+
+```hbs
+<a href={{url-for 'profile' this.profile}} class="profile">Profile</a>
+<a href={{url-for 'about' this.contact}}>About</a>
+```
+
+### With Query Params `{{link-to}}`
+
+**Before:**
+
+```hbs
+{{#link-to 'post' this.post (query-params order="CHRON")}}{{this.post.name}}{{/link-to}}
+```
+
+**After:**
+
+```hbs
+<a href={{url-for 'post' this.post queryParms=(hash order="CHRON")}}>{{this.post.name}}</a>
+```
+
+### With Replace `{{link-to}}`
+
+**Before:**
+
+```hbs
+{{#link-to 'post' this.post replace=true}}{{this.post.name}}{{/link-to}}
+```
+
+**After:**
+
+```hbs
+<a {{transition-to 'post' this.post replace=true}}>{{this.post.name}}</a>
+```
+
+One of the tricker parts about this migration is knowing how the autogenerated CSS classes are being used. Because of this, adding the route state helpers must explicitly be turned on in the codemod. For instance if you are making heavy use of the `.active` class, you will be suited best by turning pass the codemod the correct configuration to do a transform like the following:
+
+**Before**
+
+```hbs
+{{#link-to 'profile'}}Profile{{/link-to}}
+```
+
+**After**
+
+```hbs
+<a href={{url-for 'profile'}} class={{is-active 'active'}}>Profile</a>
+```
 
 ## How we teach this
 
-> What names and terminology work best for these concepts and why? How is this
-idea best presented? As a continuation of existing Ember patterns, or as a
-wholly new one?
+In many ways this vastly simplifies the Ember's approach to linking within the app. It removes the requirement for a proprietary API and instead embraces the power of URLs.
 
-> Would the acceptance of this proposal mean the Ember guides must be
-re-organized or altered? Does it change how Ember is taught to new users
-at any level?
-
-> How should this feature be introduced and taught to existing Ember
-users?
+In the cases where you do need to do more complicated things like pass in memory models to a route, things should feel very similar to `{{link-to}}` as they have the exact same signature. In the case of query param serialization, I believe we are actually aligning a mental model as to how URL generation should work.
 
 ## Drawbacks
 
-> Why should we *not* do this? Please consider the impact on teaching Ember,
-on the integration of this feature with other existing and planned features,
-on the impact of the API churn on existing apps, etc.
+This RFC expands the surface area of the templating layer by exposing the primitives that make up `{{link-to}}`. This may cause confusion of choosing between using simple basic anchor tags, `{{url-for}}` and `{{transition-to}}`, however I believe that each one of the these APIs are solving a real problem that we have in Ember today.
 
-> There are tradeoffs to choosing any path, please attempt to identify them here.
+By proxy this may cause people to encapsulate all of these primitives into a single component and thus creating a user-land version of `{{link-to}}`. This could be seen as a framework misstep if the majority of applications end up depending on the addon.
 
 ## Alternatives
 
-> What other designs have been considered? What is the impact of not doing this?
-
-> This section could also include prior art, that is, how other frameworks in the same domain have solved this problem.
+We could just start deprecating and removing functionality from `{{link-to}}` it self. That being said, it is hard to understand how much of the community is reliant on certain feature of `{{link-to}}`. This also doesn't help with usecases like the i18n and markdown use cases.
 
 ## Unresolved questions
 
-> Optional, but suggested for first drafts. What parts of the design are still
 TBD?
+
