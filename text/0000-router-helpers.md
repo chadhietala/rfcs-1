@@ -77,7 +77,7 @@ Looking at a template you would have no idea that rendering the `{{link-to}}` wo
 
 Below is a detailed design of all of the template helpers and modifiers.
 
-### {{transition-to}} Element Modifier
+### `{{transition-to}}` Element Modifier
 
 ```hbs
 <a {{transition-to 'people.index' model queryParams=(hash a=a)}}>Profile</a>
