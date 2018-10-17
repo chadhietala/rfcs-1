@@ -6,7 +6,7 @@
 
 ## Summary
 
-This RFC introduces new router helpers and modifiers that represent a decomposition of functionality of what we commonly use `{{link-to}}` for. This RFC also deprecates the usage of `{{link-to}}` and `{{query-params}}` helpers. Below is a list of the new helpers:
+This RFC introduces new router helpers that represent a decomposition of functionality of what we commonly use `{{link-to}}` for. This RFC also deprecates the `{{link-to}}` component, `{{query-params}}` helper, and default query param serialization. Below is a list of the new helpers:
 
 ```hbs
 {{transition-to}}
@@ -17,6 +17,8 @@ This RFC introduces new router helpers and modifiers that represent a decomposit
 {{is-transitioning-in}}
 {{is-transitioning-out}}
 ```
+
+This represents a super set of the functionality provided by [Ember Router Helpers](https://github.com/rwjblue/ember-router-helpers/) which has provided this RFC that confidence that a decomposition is possible.
 
 ## Motivation
 
@@ -345,8 +347,8 @@ Since `{{link-to}}` is static we can write a codemod using [Ember Template Recas
 **After:**
 
 ```hbs
-<a href={{url-for 'profile' this.profile}} class="profile">Profile</a>
-<a href={{url-for 'about' this.contact}}>About</a>
+<a {{transition-to 'profile' this.profile}} class="profile">Profile</a>
+<a {{transition-to 'about' this.contact}}>About</a>
 ```
 
 ### With Query Params `{{link-to}}`
@@ -360,7 +362,7 @@ Since `{{link-to}}` is static we can write a codemod using [Ember Template Recas
 **After:**
 
 ```hbs
-<a href={{url-for 'post' this.post queryParms=(hash order="CHRON")}}>{{this.post.name}}</a>
+<a {{transition-to 'post' this.post queryParms=(hash order="CHRON")}}>{{this.post.name}}</a>
 ```
 
 ### With Replace `{{link-to}}`
