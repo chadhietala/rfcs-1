@@ -10,8 +10,8 @@ This RFC introduces new router helpers and modifiers that represent a decomposit
 
 ```hbs
 {{transition-to}}
-{{root-url}}
 {{url-for}}
+{{root-url}}
 {{is-active}}
 {{is-loading}}
 {{is-transitioning-in}}
@@ -94,7 +94,7 @@ Using the example above:
 
 _Positional Params_
 - **`routeName`** _String_: A fully-qualified name of this route, like `"people.index"`
-- **`model`** _...Object|Array|Number|String_: Optionally pass an arbitrary amount of models to use for generation
+- **`model`** _...Object|Array|Number|String_: Optionally pass an arbitrary amount of models or identifiers for each dynamic segment to be use for generation. If you pass a fully materialized model the model hook for the corresponding route _won't_ run when the anchor is clicked. This is consistent how `{{link-to}}` works.
 
 _Named Params_
 - **`queryParms`** _Object_: Optionally pass key value pairs that will be serialized
@@ -186,7 +186,7 @@ Using the example above:
 
 _Positional Params_
 - **`routeName`** _String_: A fully-qualified name of this route, like `"people.index"`
-- **`model`** _...Object|Array|Number|String_: Optionally pass an arbitrary amount of models to use for generation
+- **`model`** _...Object|Array|Number|String_: Optionally pass an arbitrary amount of models or identifiers for each dynamic segment to be use for generation.
 
 _Named Params_
 - **`queryParms`** _Object_: Optionally pass key value pairs that will be serialized
