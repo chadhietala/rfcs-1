@@ -103,7 +103,6 @@ _Named Params_
 - **`data`** _Object_: Optionally pass a metadata key value pairs that will be attached to the transition at `Transition.data`. See below.
 - **`replace`** _Boolean_: Optionally pass a boolen to replace the current entry in the browser's history. By default `replace` is `false`.
 
-
 #### Passing Data To Transition
 
 `{{transition-to}}` takes a new option `data` that allows you to add metadata to the `Transition` object. For instance if you were instrumenting your application with Google Analytics you could use this in conjunction with the routing service to understand the attribution of a transition.
@@ -197,6 +196,8 @@ _Returns_
 - _String_: a root-relative URL as a string (which will include the application's `rootUrl`)
 
 ### Route State Helpers
+
+The following helpers are all _context dependent_, not global. For instance you might have two copies of `(is-active "posts")` in your app simultaneously where one is `true` and one is `false`, because you're in the middle of an animated transition, or because you're pre-rendering a route that hasn't been entered yet.
 
 ### `{{is-active}}` Helper
 
